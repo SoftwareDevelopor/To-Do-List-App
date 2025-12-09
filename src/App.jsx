@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import './App.css'
 import { toast, ToastContainer } from 'react-toastify'
+import addNotification, { Notifications } from 'react-push-notification'
 
 function App() {
   
@@ -12,13 +13,6 @@ function App() {
   let [datetime, setDatetime] = useState('')
   const [countdowns, setCountdowns] = useState({})
 
-  // Request notification permission on mount (improves experience)
-  useEffect(() => {
-    if (typeof window === 'undefined' || !('Notification' in window)) return
-    if (Notification.permission === 'default') {
-      Notification.requestPermission().catch(() => {})
-    }
-  }, [])
 
   // Countdown timer effect
   useEffect(() => {
@@ -36,11 +30,18 @@ function App() {
             const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
             const seconds = Math.floor((diff % (1000 * 60)) / 1000)
             newCountdowns[index] = `${days}d ${hours}h ${minutes}m ${seconds}s`
+            if(minutes==10 && hours==0 && days==0){
+              addNotification({
+                title: 'Reminder',
+                message: `Only 10 minutes left for task: "${todo.task}"`,
+                duration: 5000,
+                native: true,
+              })
+            }
           } else if (diff <= 0 && newCountdowns[index] && newCountdowns[index] !== "Time's up!") {
             // Alarm triggered
             playAlarm()
             // show a notification for this task
-            showNotification(todo.task,todo.datetime)
             newCountdowns[index] = "Time's up!"
           }
         })
@@ -68,37 +69,6 @@ function App() {
     
     oscillator.start(audioContext.currentTime)
     oscillator.stop(audioContext.currentTime + 1)
-  }
-
-  // Show desktop/mobile notification while app is open (requires permission)
-  const showNotification = (task, datetime) => {
-    if (typeof window === 'undefined' || !('Notification' in window)) return
-
-    const create = () => {
-      try {
-        const title = `Reminder: ${task}`
-        const options = {
-          body: `Your scheduled task is due now. Start working on it! Scheduled for: ${datetime}`,
-          tag: `todo-${task}-${datetime}`,
-          renotify: false,
-        }
-        const notification = new Notification(title, options)
-        notification.onclick = () => {
-          window.focus()
-          notification.close()
-        }
-      } catch {
-        // ignore
-      }
-    }
-
-    if (Notification.permission === 'granted') {
-      create()
-    } else if (Notification.permission !== 'denied') {
-      Notification.requestPermission().then(permission => {
-        if (permission === 'granted') create()
-      })
-    }
   }
 
   const saveToDo = (e) => {
@@ -133,6 +103,7 @@ function App() {
   return (
     <>
   <ToastContainer/>
+  <Notifications/>
       <div className="bg-white p-6 rounded-lg shadow-2xl w-full max-w-md fixed top-[50%] left-[50%] translate-x-[-50%] translate-y-[-50%]">
         <h1 className="text-2xl font-bold mb-6 text-center text-gray-800">My Static Todo List</h1>
         <form onSubmit={saveToDo} className=" mb-2">
