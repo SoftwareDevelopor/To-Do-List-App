@@ -2,7 +2,6 @@
 import { useState, useEffect } from 'react'
 import './App.css'
 import { toast, ToastContainer } from 'react-toastify'
-import addNotification, { Notifications } from 'react-push-notification'
 
 function App() {
   
@@ -30,14 +29,7 @@ function App() {
             const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
             const seconds = Math.floor((diff % (1000 * 60)) / 1000)
             newCountdowns[index] = `${days}d ${hours}h ${minutes}m ${seconds}s`
-            if(minutes==10 && hours==0 && days==0){
-              addNotification({
-                title: 'Reminder',
-                message: `Only 10 minutes left for task: "${todo.task}"`,
-                duration: 5000,
-                native: true,
-              })
-            }
+            
           } else if (diff <= 0 && newCountdowns[index] && newCountdowns[index] !== "Time's up!") {
             // Alarm triggered
             playAlarm()
@@ -103,9 +95,8 @@ function App() {
   return (
     <>
   <ToastContainer/>
-  <Notifications/>
       <div className="bg-white p-6 rounded-lg shadow-2xl w-full max-w-md fixed top-[50%] left-[50%] translate-x-[-50%] translate-y-[-50%]">
-        <h1 className="text-2xl font-bold mb-6 text-center text-gray-800">My Static Todo List</h1>
+        <h1 className="text-2xl font-bold mb-6 text-center text-gray-800">My Todo List :</h1>
         <form onSubmit={saveToDo} className=" mb-2">
 
           <input type="text" className="w-full h-10 px-4 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Add a new task..." value={count} onChange={(Event) => setCount(Event.target.value)} />
