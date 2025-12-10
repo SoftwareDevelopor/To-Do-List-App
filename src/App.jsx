@@ -1,8 +1,7 @@
 "use client"
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import './App.css'
 import { toast, ToastContainer } from 'react-toastify'
-import logo from './assets/to-do-list-apps.png'
 
 function App() {
   
@@ -14,31 +13,27 @@ function App() {
   const [countdowns, setCountdowns] = useState({})
 
 
-  const navigator=()=>{
-    if("Notification" in window){
-      if(Notification.permission==="granted"){
-       alert("Notification permission already granted.")
-      }
-      else if(Notification.permission !== "denied"){
-        Notification.requestPermission().then(permission=>{
-          if(permission==="granted"){
-             alert("Notification permission granted.")
-          }
-        })
-      }
+  // Request notification permission quietly on mount (no blocking alerts)
+  const remindersSentRef = useRef({})
+  const requestNotificationPermission = () => {
+    if (!("Notification" in window)) return
+    if (Notification.permission === 'default') {
+      Notification.requestPermission()
     }
   }
 
-  useEffect(()=>{
-    navigator()
-  },[])
+  useEffect(() => {
+    requestNotificationPermission()
+  }, [])
 
   // Countdown timer effect
   useEffect(() => {
     const interval = setInterval(() => {
       setCountdowns(prevCountdowns => {
         const newCountdowns = { ...prevCountdowns }
-        todoList.forEach((todo, index) => {
+        const fiveMin = 5 * 60 * 1000
+        todoList.forEach((todo) => {
+          const id = todo.id
           const targetTime = new Date(todo.datetime)
           const now = new Date()
           const diff = targetTime - now
@@ -48,24 +43,35 @@ function App() {
             const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
             const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
             const seconds = Math.floor((diff % (1000 * 60)) / 1000)
-            newCountdowns[index] = `${days}d ${hours}h ${minutes}m ${seconds}s`
-            if(newCountdowns[index]== "0d 0h 5m 0s"){
-              Notification.requestPermission().then(permission => {
-                if (permission === "granted") {
-                  new Notification("Reminder", {
-                    body: `Only 5 minutes left for task: "${todo.task}"`,
-                    silent: false,
-                    icon: `${logo}`,
-                    title: "Task Reminder",
-                  })
-                }
-              })
+            newCountdowns[id] = `${days}d ${hours}h ${minutes}m ${seconds}s`
+
+            // Trigger a one-time 5-minute reminder (use a ref to avoid repeated firing)
+            if (diff <= fiveMin && !remindersSentRef.current[id]) {
+              if (Notification.permission === 'granted') {
+                new Notification('Reminder', {
+                  body: `Only 5 minutes left for task: "${todo.task}"`,
+                  silent: false,
+                  
+                })
+              } else if (Notification.permission !== 'denied') {
+                Notification.requestPermission().then(permission => {
+                  if (permission === 'granted') {
+                    new Notification('Reminder', {
+                      body: `Only 5 minutes left for task: "${todo.task}"`,
+                      silent: false,
+                      
+                    })
+                  }
+                })
+              }
+              playAlarm()
+              remindersSentRef.current[id] = true
             }
-          } else if (diff <= 0 && newCountdowns[index] && newCountdowns[index] !== "Time's up!") {
+          } else if (diff <= 0 && newCountdowns[id] && newCountdowns[id] !== "Time's up!") {
             // Alarm triggered
             playAlarm()
-            // show a notification for this task
-            newCountdowns[index] = "Time's up!"
+            newCountdowns[id] = "Time's up!"
+            remindersSentRef.current[id] = true
           }
         })
         return newCountdowns
@@ -97,6 +103,7 @@ function App() {
   const saveToDo = (e) => {
     e.preventDefault();
     let obj={
+      id: Date.now(),
       task:count,
       datetime:datetime
     }
@@ -117,10 +124,16 @@ function App() {
   }
 
 
-  let deleteTodo=(i)=>{
-    let newTodoList=[...todoList]
-    newTodoList.splice(i, 1)
+  let deleteTodo=(id)=>{
+    const newTodoList = todoList.filter(t => t.id !== id)
     setTodoList(newTodoList)
+    // clear countdown and reminder for this id
+    setCountdowns(prev => {
+      const copy = { ...prev }
+      delete copy[id]
+      return copy
+    })
+    if (remindersSentRef.current[id]) delete remindersSentRef.current[id]
     toast.info('Task deleted successfully!')
   }
   return (
@@ -137,17 +150,17 @@ function App() {
           </div>
         </form>
         <div className="space-y-4">
-          {todoList.map((todolist, index) => {
+          {todoList.map((todolist) => {
             return (
-              <div key={index} className="flex items-center relative justify-between bg-gray-50 p-4 rounded-md border border-gray-200">
+              <div key={todolist.id} className="flex items-center relative justify-between bg-gray-50 p-4 rounded-md border border-gray-200">
                 <div className="flex flex-col w-full">
                   <div className="flex items-center justify-between">
                     <span className="text-lg text-gray-700">{todolist.task}</span>
-                    <button className='py-2 px-4 bg-orange-600 text-white cursor-pointer rounded hover:bg-orange-700' type="button" onClick={()=>deleteTodo(index)} >Delete</button>
+                    <button className='py-2 px-4 bg-orange-600 text-white cursor-pointer rounded hover:bg-orange-700' type="button" onClick={()=>deleteTodo(todolist.id)} >Delete</button>
                   </div>
                   <div className="flex justify-between items-center mt-2">
                     <span className="text-sm text-gray-500">{todolist.datetime}</span>
-                    <span className="text-md font-semibold text-blue-600">{countdowns[index] || 'calculating...'}</span>
+                    <span className="text-md font-semibold text-blue-600">{countdowns[todolist.id] || 'calculating...'}</span>
                   </div>
                 </div>
               </div>
