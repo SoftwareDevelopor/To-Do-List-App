@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import './App.css'
 import { toast, ToastContainer } from 'react-toastify'
+import logo from './assets/to-do-list-apps.png'
 
 function App() {
   
@@ -12,6 +13,25 @@ function App() {
   let [datetime, setDatetime] = useState('')
   const [countdowns, setCountdowns] = useState({})
 
+
+  const navigator=()=>{
+    if("Notification" in window){
+      if(Notification.permission==="granted"){
+       alert("Notification permission already granted.")
+      }
+      else if(Notification.permission !== "denied"){
+        Notification.requestPermission().then(permission=>{
+          if(permission==="granted"){
+             alert("Notification permission granted.")
+          }
+        })
+      }
+    }
+  }
+
+  useEffect(()=>{
+    navigator()
+  },[])
 
   // Countdown timer effect
   useEffect(() => {
@@ -29,7 +49,18 @@ function App() {
             const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
             const seconds = Math.floor((diff % (1000 * 60)) / 1000)
             newCountdowns[index] = `${days}d ${hours}h ${minutes}m ${seconds}s`
-            
+            if(newCountdowns[index]== "0d 0h 5m 0s"){
+              Notification.requestPermission().then(permission => {
+                if (permission === "granted") {
+                  new Notification("Reminder", {
+                    body: `Only 5 minutes left for task: "${todo.task}"`,
+                    silent: false,
+                    icon: `${logo}`,
+                    title: "Task Reminder",
+                  })
+                }
+              })
+            }
           } else if (diff <= 0 && newCountdowns[index] && newCountdowns[index] !== "Time's up!") {
             // Alarm triggered
             playAlarm()
