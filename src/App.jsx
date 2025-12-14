@@ -13,23 +13,31 @@ function App() {
   let [datetime, setDatetime] = useState('')
   const [countdowns, setCountdowns] = useState({})
 
-  const handlesend = (TODOTASK) => {
-    if (!("Notification" in window)) {
-      alert("Notification is not supported")
-      return
-    }
+  // Notification handler
+  const handlesend = async (Task, DateTime) => {
+    // Ensure the service worker is supported and registered
+    if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+      try {
+        const registration = await navigator.serviceWorker.getRegistration();
+        if (registration && typeof registration.showNotification === 'function') {
+          const title = 'Remainder'; // Or derive from event data
+          const options = {
+            body: `${Task} at ${DateTime}`, // Or derive from event data
+            icon: logo,
+          };
+          registration.showNotification(title, options);
+        } else {
+          console.warn('Service Worker registration not found or showNotification not available.');
 
-    Notification.requestPermission().then((permission) => {
-      if (permission == "granted" || permission == "default") {
-
-        const notifier = new Notification("To Do Remainder of your task", {
-          body: `This is a reminder for your scheduled task: ${TODOTASK}`,
-          icon: logo,
-          silent: false
-        })
-        notifier.close()
+        }
+      } catch (error) {
+        console.error('Error getting service worker registration or showing notification:', error);
       }
-    })
+    } else {
+      console.warn('Service Workers are not supported or not active.');
+      // Fallback if service workers are not supported
+      // e.g., using Notification API directly if permission is granted
+    }
   }
 
   // Countdown timer effect
@@ -42,13 +50,13 @@ function App() {
           const targetTime = new Date(todo.datetime)
           const now = new Date()
           const diff = targetTime - now
-          const fiveminutes = 5 * 60 * 1000
+          const threeminutes = 5 * 60 * 1000
 
           // Show notification 5 minutes before time's up
           if (diff > 0) {
-            if (diff <= fiveminutes && diff > fiveminutes - 1000) {
-              handlesend(todo.task)
+            if (diff <= threeminutes && diff > threeminutes - 1000) {
               playAlarm()
+              handlesend(todo.task, todo.datetime)
             }
             const days = Math.floor(diff / (1000 * 60 * 60 * 24))
             const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
