@@ -1,24 +1,76 @@
-# React + Vite
+# To‑Do List App
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A simple, responsive To‑Do List application built with **React** and **Vite**. It supports creating, editing, and persisting tasks to **Firebase**, includes offline support (PWA via Workbox), and uses **Redux Toolkit** for state management.
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## ✅ Key Features
 
-## Expanding the ESLint configuration
+- Add, edit, delete, and mark tasks as complete
+- Persist tasks to Firebase (see `src/firebaseConfig.js`)
+- Offline-first experience with a Service Worker (PWA)
+- State management with **Redux Toolkit**
+- Styling with **Tailwind CSS**
+- Notifications via **react-toastify**
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## 🚀 Quick Start
 
-## Offline registration (email/password)
+**Prerequisites**
+- Node.js (18+ recommended)
+- npm
 
-This app supports queuing email/password registrations while offline. Queued registrations are stored in IndexedDB and will be processed automatically when the app detects the device is back online.
+**Install**
+```bash
+git clone https://github.com/SoftwareDevelopor/To-Do-List-App.git
+cd To-Do-List-App
+npm install
+```
 
-Important security notes:
-- Queued credentials are stored locally in IndexedDB temporarily and cleared on successful registration.
-- Storing passwords on a device has security implications. For production use, consider encrypting queued credentials with Web Crypto and educating users about the risk.
+**Configure Firebase**
+- Replace the Firebase config in `src/firebaseConfig.js` with your project's values, or set Vite env vars (`VITE_FIREBASE_*`) and update the file to read from `import.meta.env`.
+- Enable Firestore (or your chosen database) in the Firebase Console.
 
-Behavior:
-- If the device is offline when a user submits an email/password registration, the app shows: "Registration queued — will complete when online".
-- When online, queued registrations are attempted and successful ones are removed from the queue. If a queued email is already registered, it is removed and the user is notified.
+**Run (development)**
+```bash
+npm run dev
+# open http://localhost:5173
+```
+
+**Build & Preview**
+```bash
+npm run build
+npm run preview
+```
+
+**Lint**
+```bash
+npm run lint
+```
+
+## 🧭 Project Structure
+
+- `src/` — application source
+  - `assets/` — images & static assets
+  - `slices/` — Redux slices (e.g. `UserSlice.js`)
+  - `store/` — Redux store setup
+  - `firebaseConfig.js` — Firebase initialization
+  - `sw.js` — service worker / PWA logic
+- `public/` — public static files
+- `package.json` — scripts and dependencies
+
+## 🔧 Notes on PWA & Offline
+
+This project uses `vite-plugin-pwa` and `workbox-window`. After running a production build, a service worker will be available to cache assets and enable offline functionality. Check `sw.js` for the registration and caching strategy used.
+
+## 🙏 Contributing
+
+Contributions are welcome — open an issue or a pull request. Please run `npm run lint` and ensure changes are well documented.
+
+## 📄 License
+
+This project is released under the **ISC** License.
+
+---
+
+If you'd like, I can also add badges, CI instructions, or a `CONTRIBUTING.md`. Tell me which you'd like next.
+

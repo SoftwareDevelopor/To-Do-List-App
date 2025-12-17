@@ -5,19 +5,15 @@ import { toast, ToastContainer } from 'react-toastify'
 import logo from '/pwa-48x48.png'
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged } from "firebase/auth";
 import { FcGoogle } from 'react-icons/fc'
-// NOTE: firebaseConfig file available honi chahiye
 import app from './firebaseConfig'
 import { useDispatch, useSelector } from 'react-redux'
 import { userdetails } from './slices/UserSlice'
 import { BiPlus } from 'react-icons/bi'
 
 function App() {
-
   const nowdate = new Date()
   const formattedDate = nowdate.toISOString().slice(0, 16)
-
   const [count, setCount] = useState('')
-  // 🔑 LOCAL STORAGE: Initial state ko Local Storage se load karna
   const [todoList, setTodoList] = useState(() => {
     try {
       const storedTodos = localStorage.getItem('todoList');
@@ -27,55 +23,32 @@ function App() {
       return [];
     }
   })
-
   const [priority, setPriority] = useState('')
   const [datetime, setDatetime] = useState('')
   const [countdowns, setCountdowns] = useState({})
   const [openModal, setOpenModal] = useState(false)
   const [open, setopen] = useState(false)
-
-  // 🆕 AUTH LOADING STATE
   const [authLoading, setAuthLoading] = useState(true);
-
   const dispatch = useDispatch()
-
-
-  // ==========================================================
-  // 🔄 PERSISTENCE & LIFECYCLE HOOKS
-  // ==========================================================
-
-  // 1. LOCAL STORAGE: TodoList mein change hone par data save karna
   useEffect(() => {
     localStorage.setItem('todoList', JSON.stringify(todoList));
   }, [todoList]);
 
-  // 2. FIREBASE AUTH PERSISTENCE: Login status aur Loading State maintain karna
   useEffect(() => {
     const auth = getAuth(app);
-
-    // Auth check shuru ho raha hai
     setAuthLoading(true);
-
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       if (currentUser) {
-        // User signed in
         currentUser.getIdToken().then(token => {
           dispatch(userdetails({ user: currentUser, token: token }));
         });
       } else {
-        // User signed out
         dispatch(userdetails({ user: null, token: null }));
       }
-
-      // Auth check poora ho gaya
       setAuthLoading(false);
     });
-
-    // Cleanup function
     return () => unsubscribe();
   }, [dispatch]);
-
-  // 3. NOTIFICATION PERMISSION: Permission request karna
   useEffect(() => {
     if ('Notification' in window) {
       Notification.requestPermission().then(permission => {
@@ -85,70 +58,38 @@ function App() {
       });
     }
   }, []);
-
-
   const userdata = useSelector((state) => {
-    console.log(state)
     return state.user.user
   })
-
   const usertoken = useSelector((state) => state.user.token)
-
-  // ==========================================================
-  // 🔔 NOTIFICATION & COUNTDOWN LOGIC
-  // ==========================================================
-
-  // Notification handler
   const handlesend = async (Task, DateTime) => {
-    // Service Worker ke through notification bhejne ki koshish (background/closed app ke liye)
-    if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-      try {
-        const registration = await navigator.serviceWorker.getRegistration();
-        if (registration && typeof registration.showNotification === 'function') {
-          const title = 'Reminder';
-          const options = {
+    if(Notification.permission==='granted'){
+      if(navigator.serviceWorker.controller){
+        navigator.serviceWorker.controller.postMessage({
+          type: 'SHOW_NOTIFICATION',
+          title: 'Reminder',
+          options: {
             body: `Please complete the Task ${Task} which is due at ${DateTime}`,
             icon: logo,
-          };
-          registration.showNotification(title, options);
-          return;
-        }
-      } catch (error) {
-        console.error('Error in service worker notification:', error);
+          }
+        })
       }
     }
-
-    // Fallback: Agar SW fail ho ya support na ho, toh direct Notification API/Toast
-    if (Notification.permission === 'granted') {
-      new Notification('Reminder', {
-        body: `Please complete the Task ${Task} which is due at ${DateTime}`,
-        icon: logo,
-      });
-    } else {
-      toast.info(`REMINDER: Task ${Task} due at ${DateTime}`);
-    }
   }
-
-
-  // Countdown timer effect
   useEffect(() => {
     const interval = setInterval(() => {
       setCountdowns(prevCountdowns => {
         const newCountdowns = { ...prevCountdowns }
         const fiveMinutes = 5 * 60 * 1000
-
         todoList.forEach((todo, index) => {
           const targetTime = new Date(todo.datetime)
           const now = new Date()
           const diff = targetTime - now
-
           if (diff > 0) {
-            // Notification trigger: 5 minutes se kam time bacha ho
             if (diff <= fiveMinutes && diff > fiveMinutes - 1000) {
               playAlarm()
               handlesend(todo.task, todo.datetime)
             }
-            // Countdown calculation
             const days = Math.floor(diff / (1000 * 60 * 60 * 24))
             const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
             const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
@@ -162,11 +103,9 @@ function App() {
         return newCountdowns
       })
     }, 1000)
-
     return () => clearInterval(interval)
   }, [todoList])
 
-  // Play alarm sound
   const playAlarm = () => {
     const audioContext = new (window.AudioContext || window.webkitAudioContext)()
     const oscillator = audioContext.createOscillator()
@@ -180,11 +119,6 @@ function App() {
     oscillator.start(audioContext.currentTime)
     oscillator.stop(audioContext.currentTime + 1)
   }
-
-  // ==========================================================
-  // 📝 HANDLERS
-  // ==========================================================
-
   const saveToDo = (e) => {
     e.preventDefault();
     let obj = {
@@ -196,7 +130,6 @@ function App() {
       alert('Please enter task and select date/time');
       return;
     }
-    // Future date check
     if (new Date(datetime) > new Date(formattedDate)) {
       setTodoList([...todoList, obj]);
       toast.success('Task added successfully!')
@@ -210,15 +143,11 @@ function App() {
       alert('Please select a future date and time');
     }
   }
-
-  // ⏫ UPDATED GOOGLE SIGN-IN HANDLER
   let handleUserSubmit = () => {
     const provider = new GoogleAuthProvider()
     const auth = getAuth(app)
-
     signInWithPopup(auth, provider)
       .then(() => {
-        // Redux update will happen via onAuthStateChanged
         toast.success(`Welcome! You are now signed in.`)
       })
       .catch((error) => {
@@ -226,15 +155,11 @@ function App() {
 
       })
   }
-
-
-
   let deleteTodo = (id) => {
     const updatedList = todoList.filter((todo, index) => index !== id)
     setTodoList(updatedList)
     toast.info('Task deleted successfully!')
   }
-
   const logout=()=>{
     setopen(false)
     dispatch(userdetails({user:null,token:null}))

@@ -5,9 +5,11 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
   plugins: [react(), tailwindcss(), VitePWA({
-    registerType: "prompt",
-    injectRegister: "auto",
-    workbox: {
+    strategies: "injectManifest",
+    srcDir: "src",
+    filename: "sw.js",
+    registerType: "autoUpdate",
+    injectManifest:{
       globPatterns: [
         "**/*.{js,css,html,ico,png,svg}",
       ],
@@ -71,22 +73,21 @@ export default defineConfig({
       ],
       screenshots: [
         {
-          src: "Screenshot 2025-12-16 203549.png",
-          sizes: "2880x473",
-          type: "image/png"
+          src: "Screenshot.png",
+          sizes: "1280x720",
+          type: "image/png",
+          form_factor: "wide"
         },
         {
-          src: "Screenshot 2025-12-16 203644.png",
-          sizes: "289x482",
+          src: "Screenshot1.png",
+          sizes: "320x320",
           type: "image/png"
         }
       ]
     },
     devOptions:{
-      enabled:true,
-      type:'module',
-      navigateFallbackAllowlist:[/^index.html$/]
+      enabled: true,
+      type: "module"
     }
-
   })],
 })

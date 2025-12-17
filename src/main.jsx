@@ -16,6 +16,23 @@ registerSW({
   onOfflineReady() {}
 })
 
+window.addEventListener('beforeinstallprompt', (e) => {
+  // Prevent the default small bar
+  e.preventDefault();
+  
+  // Immediately show the large native install prompt
+  // Note: This usually requires a user click elsewhere on the page first 
+  // due to browser security policies.
+  e.prompt(); 
+  
+  e.userChoice.then((choiceResult) => {
+    if (choiceResult.outcome === 'accepted') {
+      console.log('User accepted the install');
+    }
+    window.deferredPrompt = null;
+  });
+});
+
 createRoot(document.getElementById('root')).render(
 
   <Provider store={store}>
