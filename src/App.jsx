@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react'
 import './App.css'
 import { toast, ToastContainer } from 'react-toastify'
-import logo from '/maskable_icon_x48.png'
+import logo from '/pwa-48x48.png'
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged } from "firebase/auth";
 import { FcGoogle } from 'react-icons/fc'
 // NOTE: firebaseConfig file available honi chahiye

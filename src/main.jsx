@@ -6,13 +6,14 @@ import { Provider } from 'react-redux'
 import { store } from './store/store.js'
 import { registerSW } from 'virtual:pwa-register'
 
-const updateSw=registerSW({
-  onNeedRefresh() {
-    updateSw(true)
+
+registerSW({
+  onNeedRefresh(){
+    if(confirm("New version available. Do you want to update?")){
+      window.location.reload();
+    }
   },
-  onOfflineReady() {
-    console.log('App is ready to work offline.')
-  }
+  onOfflineReady() {}
 })
 
 createRoot(document.getElementById('root')).render(
