@@ -91,3 +91,165 @@
         )
     }
     })
+
+
+/* --------------------------------------------------------------------------
+   Notification & Background sync helpers
+   - Handles messages from clients (save task, show notification)
+   - Supports Push API (server-sent) and Background Sync / Periodic Sync
+   - Uses a small IndexedDB store "todo-db" / "tasks" to persist scheduled tasks
+   Note: For reliable background notifications when the app is closed, use the
+   Push API from a server that sends a push at the scheduled time.
+   -------------------------------------------------------------------------- */
+
+const DB_NAME = 'todo-db';
+const DB_VERSION = 1;
+const STORE_NAME = 'tasks';
+
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function saveTask(task) {
+  try {
+    const db = await openDB();
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    tx.objectStore(STORE_NAME).put(task);
+    return tx.complete;
+  } catch (err) {
+    console.error('saveTask error', err);
+  }
+}
+
+async function getDueTasks(now = Date.now()) {
+  const result = [];
+  try {
+    const db = await openDB();
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const store = tx.objectStore(STORE_NAME);
+    const req = store.openCursor();
+    return await new Promise((resolve) => {
+      req.onsuccess = (e) => {
+        const cursor = e.target.result;
+        if (cursor) {
+          const item = cursor.value;
+          // item.datetime is expected to be an ISO string or timestamp
+          const itemTime = typeof item.datetime === 'number' ? item.datetime : new Date(item.datetime).getTime();
+          if (!itemTime || itemTime <= now) {
+            result.push(item);
+          }
+          cursor.continue();
+        } else {
+          resolve(result);
+        }
+      };
+      req.onerror = () => resolve(result);
+    });
+  } catch (err) {
+    console.error('getDueTasks error', err);
+    return result;
+  }
+}
+
+async function deleteTask(id) {
+  try {
+    const db = await openDB();
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    tx.objectStore(STORE_NAME).delete(id);
+    return tx.complete;
+  } catch (err) {
+    console.error('deleteTask error', err);
+  }
+}
+
+async function checkAndNotify() {
+  const now = Date.now();
+  const dueTasks = await getDueTasks(now);
+  if (dueTasks.length === 0) return;
+
+  const notifications = dueTasks.map(async (task) => {
+    const title = task.title || 'Task Reminder';
+    const options = task.options || {
+      body: `Please complete the task: ${task.task || ''}`,
+      icon: task.icon || '/pwa-48x48.png',
+      badge: task.badge || '/pwa-48x48.png',
+      tag: `task-${task.id}`,
+      data: { url: task.url || '/' }
+    };
+
+    await self.registration.showNotification(title, options);
+    await deleteTask(task.id);
+  });
+
+  await Promise.all(notifications);
+}
+
+self.addEventListener('message', (event) => {
+  const data = event.data;
+  if (!data || !data.type) return;
+  if (data.type === 'SHOW_NOTIFICATION') {
+    const { title, options } = data;
+    event.waitUntil(self.registration.showNotification(title, options));
+  } else if (data.type === 'SAVE_TASK') {
+    // Expect task to contain { id, task, datetime, title?, options? }
+    const task = data.task;
+    if (task && task.id) {
+      saveTask(task);
+    }
+  } else if (data.type === 'SYNC_NOW') {
+    event.waitUntil(checkAndNotify());
+  }
+});
+
+self.addEventListener('push', (event) => {
+  const payload = event.data ? (event.data.json ? event.data.json() : JSON.parse(event.data.text())) : {};
+  const title = payload.title || 'Task Reminder';
+  const options = payload.options || {
+    body: payload.body || (payload.task ? `Reminder: ${payload.task}` : 'You have a scheduled task'),
+    icon: payload.icon || '/pwa-48x48.png',
+    badge: payload.badge || '/pwa-48x48.png',
+    data: payload.data || { url: '/' }
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener('sync', (event) => {
+  if (event.tag === 'sync-tasks') {
+    event.waitUntil(checkAndNotify());
+  }
+});
+
+self.addEventListener('periodicsync', (event) => {
+  // Requires Periodic Background Sync support and registration from the client
+  if (event.tag === 'task-check') {
+    event.waitUntil(checkAndNotify());
+  }
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const urlToOpen = (event.notification && event.notification.data && event.notification.data.url) || '/';
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if (client.url === urlToOpen && 'focus' in client) {
+          return client.focus();
+        }
+      }
+      if (clients.openWindow) {
+        return clients.openWindow(urlToOpen);
+      }
+    })
+  );
+});
+

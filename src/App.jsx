@@ -58,6 +58,43 @@ function App() {
       });
     }
   }, []);
+
+  // Helper: send a task to the service worker to persist and schedule notifications
+  const sendTaskToServiceWorker = async (task) => {
+    if (!('serviceWorker' in navigator)) return;
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      // prefer active worker
+      const worker = reg.active || navigator.serviceWorker.controller;
+      if (worker && worker.postMessage) {
+        worker.postMessage({ type: 'SAVE_TASK', task });
+      }
+      // Try to register a one-off sync so the SW performs checks as soon as online
+      if (reg.sync) {
+        await reg.sync.register('sync-tasks').catch(() => {});
+      }
+    } catch (err) {
+      // ignore errors
+    }
+  };
+
+  // On app load or when coming online, ask SW to check for due tasks
+  useEffect(() => {
+    const doSyncNow = () => {
+      if (!('serviceWorker' in navigator)) return;
+      navigator.serviceWorker.ready.then((reg) => {
+        if (reg.active && reg.active.postMessage) {
+          reg.active.postMessage({ type: 'SYNC_NOW' });
+        }
+        if (reg.sync) reg.sync.register('sync-tasks').catch(() => {});
+      }).catch(() => {});
+    };
+    doSyncNow();
+
+    const onOnline = () => doSyncNow();
+    window.addEventListener('online', onOnline);
+    return () => window.removeEventListener('online', onOnline);
+  }, []);
   const userdata = useSelector((state) => {
     return state.user.user
   })
@@ -121,27 +158,48 @@ function App() {
   }
   const saveToDo = (e) => {
     e.preventDefault();
-    let obj = {
-      task: count,
-      datetime: datetime,
-      priority: priority
-    }
+
     if (count === '' || datetime === '') {
       alert('Please enter task and select date/time');
       return;
     }
-    if (new Date(datetime) > new Date(formattedDate)) {
-      setTodoList([...todoList, obj]);
-      toast.success('Task added successfully!')
-      e.target.reset();
-      setCount('');
-      setDatetime('');
-      setPriority('');
-      setOpenModal(false);
-    }
-    else {
+
+    if (!(new Date(datetime) > new Date(formattedDate))) {
       alert('Please select a future date and time');
+      return;
     }
+
+    const id = Date.now().toString() + '-' + Math.random().toString(36).slice(2, 8);
+    const taskObj = {
+      id,
+      task: count,
+      datetime: datetime,
+      datetimeMs: new Date(datetime).getTime(),
+      priority: priority,
+      title: count,
+      options: {
+        body: `Reminder: ${count} at ${datetime}`,
+        icon: logo,
+        badge: logo,
+        data: { url: '/' }
+      }
+    };
+
+    // Update local state / localStorage
+    setTodoList((prev) => {
+      const next = [...prev, taskObj];
+      return next;
+    });
+
+    // Notify service worker to save and schedule
+    sendTaskToServiceWorker(taskObj);
+
+    toast.success('Task added successfully!')
+    e.target.reset();
+    setCount('');
+    setDatetime('');
+    setPriority('');
+    setOpenModal(false);
   }
   let handleUserSubmit = () => {
     const provider = new GoogleAuthProvider()
