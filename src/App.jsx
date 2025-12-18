@@ -9,20 +9,12 @@ import app from './firebaseConfig'
 import { useDispatch, useSelector } from 'react-redux'
 import { userdetails } from './slices/UserSlice'
 import { BiPlus } from 'react-icons/bi'
+import { todolistdetails } from './slices/ToDoListSlice'
 
 function App() {
   const nowdate = new Date()
   const formattedDate = nowdate.toISOString().slice(0, 16)
   const [count, setCount] = useState('')
-  const [todoList, setTodoList] = useState(() => {
-    try {
-      const storedTodos = localStorage.getItem('todoList');
-      return storedTodos ? JSON.parse(storedTodos) : [];
-    } catch (error) {
-      console.error("Error loading todos from local storage:", error);
-      return [];
-    }
-  })
   const [priority, setPriority] = useState('')
   const [datetime, setDatetime] = useState('')
   const [countdowns, setCountdowns] = useState({})
@@ -30,9 +22,6 @@ function App() {
   const [open, setopen] = useState(false)
   const [authLoading, setAuthLoading] = useState(true);
   const dispatch = useDispatch()
-  useEffect(() => {
-    localStorage.setItem('todoList', JSON.stringify(todoList));
-  }, [todoList]);
 
   useEffect(() => {
     const auth = getAuth(app);
@@ -49,6 +38,25 @@ function App() {
     });
     return () => unsubscribe();
   }, [dispatch]);
+
+  let handleUserSubmit = () => {
+    const provider = new GoogleAuthProvider()
+    const auth = getAuth(app)
+    signInWithPopup(auth, provider)
+      .then(() => {
+        toast.success(`Welcome! You are now signed in.`)
+      })
+      .catch((error) => {
+        console.error("Google Sign-in failed:", error)
+
+      })
+  }
+
+  
+  const userdata = useSelector((state) => state.user.user)
+
+  const usertoken = useSelector((state) => state.user.token)
+
   useEffect(() => {
     if ('Notification' in window) {
       Notification.requestPermission().then(permission => {
@@ -59,66 +67,43 @@ function App() {
     }
   }, []);
 
-  // Helper: send a task to the service worker to persist and schedule notifications
-  const sendTaskToServiceWorker = async (task) => {
-    if (!('serviceWorker' in navigator)) return;
-    try {
-      const reg = await navigator.serviceWorker.ready;
-      // prefer active worker
-      const worker = reg.active || navigator.serviceWorker.controller;
-      if (worker && worker.postMessage) {
-        worker.postMessage({ type: 'SAVE_TASK', task });
-      }
-      // Try to register a one-off sync so the SW performs checks as soon as online
-      if (reg.sync) {
-        await reg.sync.register('sync-tasks').catch(() => {});
-      }
-    } catch (err) {
-      // ignore errors
-    }
-  };
-
-  // On app load or when coming online, ask SW to check for due tasks
-  useEffect(() => {
-    const doSyncNow = () => {
-      if (!('serviceWorker' in navigator)) return;
-      navigator.serviceWorker.ready.then((reg) => {
-        if (reg.active && reg.active.postMessage) {
-          reg.active.postMessage({ type: 'SYNC_NOW' });
-        }
-        if (reg.sync) reg.sync.register('sync-tasks').catch(() => {});
-      }).catch(() => {});
-    };
-    doSyncNow();
-
-    const onOnline = () => doSyncNow();
-    window.addEventListener('online', onOnline);
-    return () => window.removeEventListener('online', onOnline);
-  }, []);
-  const userdata = useSelector((state) => {
-    return state.user.user
+  let todolistfromstore=useSelector((state)=>{
+    return state.todolistdetailing.todolist
   })
-  const usertoken = useSelector((state) => state.user.token)
-  const handlesend = async (Task, DateTime) => {
-    if(Notification.permission==='granted'){
-      if(navigator.serviceWorker.controller){
-        navigator.serviceWorker.controller.postMessage({
-          type: 'SHOW_NOTIFICATION',
-          title: 'Reminder',
-          options: {
-            body: `Please complete the Task ${Task} which is due at ${DateTime}`,
-            icon: logo,
-          }
-        })
-      }
+  
+  const saveToDo = (e) => {
+    e.preventDefault();
+    let obj = {
+      task: count,
+      datetime: datetime,
+      priority: priority
+    }
+    if (count === '' || datetime === '') {
+      alert('Please enter task and select date/time');
+      return;
+    }
+    if (new Date(datetime) > new Date(formattedDate)) {
+      //todolistdetails is an array in the redux store
+      dispatch(todolistdetails({ todolist: [obj] }))
+      toast.success('Task added successfully!')
+      e.target.reset();
+      setCount('');
+      setDatetime('');
+      setPriority('');
+      setOpenModal(false);
+    }
+    else {
+      alert('Please select a future date and time');
     }
   }
+
+  
   useEffect(() => {
     const interval = setInterval(() => {
       setCountdowns(prevCountdowns => {
         const newCountdowns = { ...prevCountdowns }
         const fiveMinutes = 5 * 60 * 1000
-        todoList.forEach((todo, index) => {
+        todolistfromstore.forEach((todo, index) => {
           const targetTime = new Date(todo.datetime)
           const now = new Date()
           const diff = targetTime - now
@@ -141,7 +126,23 @@ function App() {
       })
     }, 1000)
     return () => clearInterval(interval)
-  }, [todoList])
+  }, [todolistfromstore])
+
+  const handlesend = async (Task, DateTime) => {
+    if (Notification.permission === 'granted') {
+      if (navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({
+          type: 'SHOW_NOTIFICATION',
+          title: 'Reminder',
+          options: {
+            body: `Please complete the Task ${Task} which is due at ${DateTime}`,
+            icon: logo,
+          }
+        })
+      }
+    }
+  }
+
 
   const playAlarm = () => {
     const audioContext = new (window.AudioContext || window.webkitAudioContext)()
@@ -156,71 +157,15 @@ function App() {
     oscillator.start(audioContext.currentTime)
     oscillator.stop(audioContext.currentTime + 1)
   }
-  const saveToDo = (e) => {
-    e.preventDefault();
+  
 
-    if (count === '' || datetime === '') {
-      alert('Please enter task and select date/time');
-      return;
-    }
-
-    if (!(new Date(datetime) > new Date(formattedDate))) {
-      alert('Please select a future date and time');
-      return;
-    }
-
-    const id = Date.now().toString() + '-' + Math.random().toString(36).slice(2, 8);
-    const taskObj = {
-      id,
-      task: count,
-      datetime: datetime,
-      datetimeMs: new Date(datetime).getTime(),
-      priority: priority,
-      title: count,
-      options: {
-        body: `Reminder: ${count} at ${datetime}`,
-        icon: logo,
-        badge: logo,
-        data: { url: '/' }
-      }
-    };
-
-    // Update local state / localStorage
-    setTodoList((prev) => {
-      const next = [...prev, taskObj];
-      return next;
-    });
-
-    // Notify service worker to save and schedule
-    sendTaskToServiceWorker(taskObj);
-
-    toast.success('Task added successfully!')
-    e.target.reset();
-    setCount('');
-    setDatetime('');
-    setPriority('');
-    setOpenModal(false);
-  }
-  let handleUserSubmit = () => {
-    const provider = new GoogleAuthProvider()
-    const auth = getAuth(app)
-    signInWithPopup(auth, provider)
-      .then(() => {
-        toast.success(`Welcome! You are now signed in.`)
-      })
-      .catch((error) => {
-        console.error("Google Sign-in failed:", error)
-
-      })
-  }
   let deleteTodo = (id) => {
-    const updatedList = todoList.filter((todo, index) => index !== id)
-    setTodoList(updatedList)
+    const todolistfromstore = todolistfromstore.filter((todo, index) => index !== id)
     toast.info('Task deleted successfully!')
   }
-  const logout=()=>{
+  const logout = () => {
     setopen(false)
-    dispatch(userdetails({user:null,token:null}))
+    dispatch(userdetails({ user: null, token: null }))
   }
 
   return (
@@ -252,7 +197,7 @@ function App() {
                   :
                   <li>
                     <h1 className='text-xl font-bold relative cursor-pointer' onClick={() => setopen(true)}>{userdata?.displayName || 'User'}
-                      <div className={`absolute top-[45px] right-0 bg-white shadow-lg border px-3 py-2 rounded-md z-10 ${open == true ? 'block' : 'hidden'}`}  onClick={logout}>
+                      <div className={`absolute top-[45px] right-0 bg-white shadow-lg border px-3 py-2 rounded-md z-10 ${open == true ? 'block' : 'hidden'}`} onClick={logout}>
                         <h2 className="text-lg font-semibold" >Logout</h2>
                       </div>
                     </h1>
@@ -306,8 +251,8 @@ function App() {
                 </thead>
                 <tbody class="text-sm text-body bg-neutral-secondary-soft border-b rounded-base border-default text-center">
                   {
-                    todoList.length >= 1 ?
-                      todoList.map((todolist, index) => {
+                    todolistfromstore.length >= 1 ?
+                      todolistfromstore.map((todolist, index) => {
                         return (
                           <tr key={index} class="bg-neutral-primary border-b border-default">
                             <th class="px-6 py-4 font-medium text-heading whitespace-nowrap">{todolist.task}</th>

@@ -1,9 +1,6 @@
 import { createSlice } from "@reduxjs/toolkit";
 import Cookies from "js-cookies";
 
-
-
-
 export const userslice=createSlice({
     name:'User',
     initialState:{
